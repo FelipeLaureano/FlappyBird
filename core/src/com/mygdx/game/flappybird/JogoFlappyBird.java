@@ -21,6 +21,7 @@ public class JogoFlappyBird extends ApplicationAdapter {
 	private int pontos = 0;
 	private int movimentaX = 0;
 	private int gravidade = 0;
+	private int estadoJogo = 0; //Para fazer mudanças de estado do jogo
 
 	//Construção da aplicação
 	private SpriteBatch batch;
@@ -28,6 +29,7 @@ public class JogoFlappyBird extends ApplicationAdapter {
 	private Texture fundo;//textura
 	private Texture canoTopo;
 	private Texture canoBaixo;
+	private Texture gameOver;
 
 	//Variáveis tela
 	//float em todos para variar valor(usando multiplicador)
@@ -39,8 +41,12 @@ public class JogoFlappyBird extends ApplicationAdapter {
 	private float espacoEntreCanos;
 	private float posicaoCanoVertical;
 
-	private Random random;
 	BitmapFont textoPontuacao;
+	BitmapFont textoReiniciar;
+	BitmapFont textoMelhorPontuacao;
+
+	private Random random;
+
 	private boolean passouCano = false;
 
 	private ShapeRenderer shapeRenderer;
@@ -57,7 +63,15 @@ public class JogoFlappyBird extends ApplicationAdapter {
 
 		inicializarTexturas();
 		inicializarObjetos();
+	}
 
+	@Override
+	public void render () {
+
+		verificarEstadoJogo();
+		validarPontos();
+		desenharTexturas();
+		detectarColisao();
 	}
 
 	private void inicializarTexturas() {
@@ -71,33 +85,42 @@ public class JogoFlappyBird extends ApplicationAdapter {
 
 		canoBaixo = new Texture("cano_baixo_maior.png");
 		canoTopo = new Texture("cano_topo_maior.png");
+
+		gameOver = new Texture("game_over.png");
 	}
 
 	private void inicializarObjetos(){
 
 		batch = new SpriteBatch();
-		random = new Random();
+		random = new Random();//Canos aleatórios
 
 		larguraDispositivo = Gdx.graphics.getWidth();//pegando informaçoes do dispositivo(propriedades da tela)
 		alturaDispositivo = Gdx.graphics.getHeight();//pegando informaçoes do dispositivo(propriedades da tela)
 		posicaoInicialVerticalPassaro = alturaDispositivo / 2;//para aparecer no meio da tela
 		posicaoCanoHorizontal = larguraDispositivo;//coloca no final (direita) da tela
-		espacoEntreCanos = 350;//possível aumentar ou diminuir dificuldade do jogo
+		espacoEntreCanos = 700;//possível aumentar ou diminuir dificuldade do jogo
 
-		//Criação do texto de pontuação:
-		textoPontuacao = new BitmapFont();
-		textoPontuacao.setColor(Color.WHITE);
-		textoPontuacao.getData().setScale(10);
+		//Criação do texto de Pontuação:
+		textoPontuacao = new BitmapFont();//Fonte
+		textoPontuacao.setColor(Color.WHITE);//Cor
+		textoPontuacao.getData().setScale(10);//Tamanho
+
+		//Criando texto Melhor Pontuação:
+		textoMelhorPontuacao = new BitmapFont();
+		textoMelhorPontuacao.setColor(Color.RED);
+		textoMelhorPontuacao.getData().setScale(2);
+
+		//Criando texto Reiniciar:
+		textoReiniciar = new BitmapFont();
+		textoReiniciar.setColor(Color.GREEN);
+		textoReiniciar.getData().setScale(2);
+
+		shapeRenderer = new ShapeRenderer();
+		circuloPassaro = new Circle();
+		retanguloCanoCima = new Rectangle();
+		retanguloCanoBaixo = new Rectangle();
 	}
 
-	@Override
-	public void render () {
-
-		verificarEstadoJogo();
-		validarPontos();
-		desenharTexturas();
-		detectarColisao();
-	}
 
 	private void detectarColisao(){
 		circuloPassaro.set(200 + passaros[0].getWidth() / 2, //posição do pássaro + tamanho dele dividido pelo diametro
@@ -106,42 +129,53 @@ public class JogoFlappyBird extends ApplicationAdapter {
 
 		//Identificar tamanho da colisao
 		retanguloCanoCima.set(posicaoCanoHorizontal,
-				alturaDispositivo / 2 - canoTopo.getHeight() - espacoEntreCanos / 2 + posicaoCanoVertical, canoTopo.getWidth(), canoTopo.getHeight());
+				alturaDispositivo / 2 + espacoEntreCanos / 2 + posicaoCanoVertical,
+				canoTopo.getWidth(), canoTopo.getHeight());
 
 		retanguloCanoBaixo.set(posicaoCanoHorizontal,
-				alturaDispositivo / 2 - canoBaixo.getHeight() - espacoEntreCanos / 2 + posicaoCanoVertical, canoBaixo.getWidth(), canoBaixo.getHeight());
+				alturaDispositivo / 2 - canoBaixo.getHeight() - espacoEntreCanos / 2 + posicaoCanoVertical,
+				canoBaixo.getWidth(), canoBaixo.getHeight());
 
 		//Verificar se bateu
 		boolean colisaoCanoCima = Intersector.overlaps(circuloPassaro, retanguloCanoCima);
 		boolean colisaoCanoBaixo = Intersector.overlaps(circuloPassaro, retanguloCanoBaixo);
 
 		if(colisaoCanoBaixo || colisaoCanoCima){
-			Gdx.app.log("Log","Bateu");
+			Gdx.app.log("Log","Colidiu");
+			estadoJogo = 2;//Mudança de estado do jogo
 		}
 	}
 
 	private void verificarEstadoJogo() {
 
-		posicaoCanoHorizontal -= Gdx.graphics.getDeltaTime() * 200;//movimentação do cano
-		if(posicaoCanoHorizontal < -canoBaixo.getWidth()){
-			posicaoCanoHorizontal = larguraDispositivo;// ir até o final da tela
-			posicaoCanoVertical = random.nextInt(400) -200;//variação de abertura
-			passouCano = false;
-		}
-
 		boolean toqueTela = Gdx.input.justTouched();// toque na tela para "pular"
-		if(Gdx.input.justTouched()){
-			gravidade = -25;
-		}
-		if(posicaoInicialVerticalPassaro > 0 || toqueTela){
-			posicaoInicialVerticalPassaro = posicaoInicialVerticalPassaro - gravidade;
+
+		if(estadoJogo == 0){
+			if(Gdx.input.justTouched()){ //Toque na tela
+				gravidade = -25;
+				estadoJogo = 1;//Mudança de estado
+			}
+		}else if(estadoJogo == 1){
+
+			if(Gdx.input.justTouched()) { //Toque na tela
+				gravidade = -25;
+			}
+			posicaoCanoHorizontal -= Gdx.graphics.getDeltaTime() * 200;//movimentação do cano
+			if(posicaoCanoHorizontal < -canoBaixo.getWidth()){
+				posicaoCanoHorizontal = larguraDispositivo;// ir até o final da tela
+				posicaoCanoVertical = random.nextInt(400) -200;//variação de abertura
+				passouCano = false;
+			}
+
+			if(posicaoInicialVerticalPassaro > 0 || toqueTela){
+				posicaoInicialVerticalPassaro = posicaoInicialVerticalPassaro - gravidade;
+			}
+
+			gravidade ++;
+		}else if(estadoJogo == 2){
+
 		}
 
-		variacao += Gdx.graphics.getDeltaTime() * 10;//variação de animação do personagem
-		if(variacao >3){
-			variacao = 0;
-		}
-		gravidade++;
 		movimentaX++;
 	}
 
@@ -152,6 +186,12 @@ public class JogoFlappyBird extends ApplicationAdapter {
 				pontos++;
 				passouCano = true;
 			}
+		}
+
+		//Animação é feita nesse método pois esse método acontece a todo o tempo:
+		variacao += Gdx.graphics.getDeltaTime() * 10;//variação de animação do personagem
+		if(variacao >3){
+			variacao = 0;
 		}
 	}
 
@@ -171,6 +211,15 @@ public class JogoFlappyBird extends ApplicationAdapter {
 
 		//Desenho da pontuação:
 		textoPontuacao.draw(batch, String.valueOf(pontos), larguraDispositivo / 2, alturaDispositivo - 100);
+
+		//Desenho mensagem Game Over e Pontuação:
+		if(estadoJogo == 2){
+			batch.draw(gameOver, larguraDispositivo / 2 - gameOver.getWidth() / 2, alturaDispositivo / 2);
+			textoReiniciar.draw(batch,"TOQUE NA TELA PARA REINICIAR!",
+					larguraDispositivo / 2 -250, alturaDispositivo / 2 - gameOver.getHeight() / 2);
+			textoMelhorPontuacao.draw(batch,"MELHOR PONTUAÇÂO: 0 PONTOS",
+					larguraDispositivo / 2 -250, alturaDispositivo / 2 - gameOver.getHeight() * 2);
+		}
 
 		batch.end();
 
