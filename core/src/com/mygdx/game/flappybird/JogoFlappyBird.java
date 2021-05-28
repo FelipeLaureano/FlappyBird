@@ -2,6 +2,8 @@ package com.mygdx.game.flappybird;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Preferences;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -18,6 +20,7 @@ import javax.xml.soap.Text;
 
 public class JogoFlappyBird extends ApplicationAdapter {
 
+	private int pontuacaoMaxima = 0;
 	private int pontos = 0;
 	private int movimentaX = 0;
 	private int gravidade = 0;
@@ -40,10 +43,15 @@ public class JogoFlappyBird extends ApplicationAdapter {
 	private float posicaoCanoHorizontal;
 	private float espacoEntreCanos;
 	private float posicaoCanoVertical;
+	private float posicaoHorizontalPassaro = 0;
 
 	BitmapFont textoPontuacao;
 	BitmapFont textoReiniciar;
 	BitmapFont textoMelhorPontuacao;
+
+	Sound somVoando;
+	Sound somColisao;
+	Sound somPontuacao;
 
 	private Random random;
 
@@ -53,6 +61,8 @@ public class JogoFlappyBird extends ApplicationAdapter {
 	private Circle circuloPassaro;
 	private Rectangle retanguloCanoCima;
 	private Rectangle retanguloCanoBaixo;
+
+	Preferences preferencias;//Persistência de dados da pontuação
 
 	//Movimentação
 	//private int movimentaY = 0;
@@ -98,7 +108,7 @@ public class JogoFlappyBird extends ApplicationAdapter {
 		alturaDispositivo = Gdx.graphics.getHeight();//pegando informaçoes do dispositivo(propriedades da tela)
 		posicaoInicialVerticalPassaro = alturaDispositivo / 2;//para aparecer no meio da tela
 		posicaoCanoHorizontal = larguraDispositivo;//coloca no final (direita) da tela
-		espacoEntreCanos = 700;//possível aumentar ou diminuir dificuldade do jogo
+		espacoEntreCanos = 600;//possível aumentar ou diminuir dificuldade do jogo
 
 		//Criação do texto de Pontuação:
 		textoPontuacao = new BitmapFont();//Fonte
@@ -119,6 +129,15 @@ public class JogoFlappyBird extends ApplicationAdapter {
 		circuloPassaro = new Circle();
 		retanguloCanoCima = new Rectangle();
 		retanguloCanoBaixo = new Rectangle();
+
+		//Criando sons do jogo:
+		somColisao = Gdx.audio.newSound(Gdx.files.internal("som_batida.wav"));
+		somVoando = Gdx.audio.newSound(Gdx.files.internal("som_asa.wav"));
+		somPontuacao = Gdx.audio.newSound(Gdx.files.internal("som_pontos.wav"));
+
+		//Atribuindo as preferências a pontuação máxima:
+		preferencias = Gdx.app.getPreferences("flappybird");
+		pontuacaoMaxima = preferencias.getInteger("pontuacaoMaxima", 0);
 	}
 
 
@@ -142,7 +161,10 @@ public class JogoFlappyBird extends ApplicationAdapter {
 
 		if(colisaoCanoBaixo || colisaoCanoCima){
 			Gdx.app.log("Log","Colidiu");
-			estadoJogo = 2;//Mudança de estado do jogo
+			if(estadoJogo == 1){
+				somColisao.play();//Toca som de colisão
+				estadoJogo = 2;//Mudança de estado do jogo
+			}
 		}
 	}
 
@@ -154,11 +176,13 @@ public class JogoFlappyBird extends ApplicationAdapter {
 			if(Gdx.input.justTouched()){ //Toque na tela
 				gravidade = -25;
 				estadoJogo = 1;//Mudança de estado
+				somVoando.play();//Som das asas
 			}
 		}else if(estadoJogo == 1){
 
 			if(Gdx.input.justTouched()) { //Toque na tela
-				gravidade = -25;
+				gravidade = -20;
+				somVoando.play();//Som das asas
 			}
 			posicaoCanoHorizontal -= Gdx.graphics.getDeltaTime() * 200;//movimentação do cano
 			if(posicaoCanoHorizontal < -canoBaixo.getWidth()){
@@ -172,8 +196,23 @@ public class JogoFlappyBird extends ApplicationAdapter {
 			}
 
 			gravidade ++;
-		}else if(estadoJogo == 2){
+		}else if(estadoJogo == 2){//Se estado de morte
+			if(pontos > pontuacaoMaxima){
+				pontuacaoMaxima = pontos;//Atualizar pontuação máxima
+				preferencias.putInteger("pontuacaoMaxima", pontuacaoMaxima);//Para persistência de dados
+			}
 
+
+			posicaoHorizontalPassaro -= Gdx.graphics.getDeltaTime() * 500; //Resposta ao usuário para morte(volta para tras)
+
+			if(toqueTela){
+				estadoJogo = 0;//Resetando estado inicial do jogo
+				pontos = 0;//Resetando pontos
+				gravidade = 0;//Resetando gravidade
+				posicaoHorizontalPassaro = 0;//Resetando posição horizontal do pássaro
+				posicaoInicialVerticalPassaro = alturaDispositivo / 2;//Resetando posição vertical do pássaro
+				posicaoCanoHorizontal = larguraDispositivo;//Resetando canos
+			}
 		}
 
 		movimentaX++;
@@ -185,6 +224,7 @@ public class JogoFlappyBird extends ApplicationAdapter {
 			if(!passouCano){
 				pontos++;
 				passouCano = true;
+				somPontuacao.play();//Ligar esse som
 			}
 		}
 
@@ -201,7 +241,7 @@ public class JogoFlappyBird extends ApplicationAdapter {
 
 		//Desenho fundo e pássaro:
 		batch.draw(fundo, 0, 0, larguraDispositivo, alturaDispositivo);//para aparecer na tela
-		batch.draw(passaros[(int)variacao],200, posicaoInicialVerticalPassaro);//animação na tela
+		batch.draw(passaros[(int)variacao],200 + posicaoHorizontalPassaro, posicaoInicialVerticalPassaro);//animação na tela
 
 		//Desenho dos canos:
 		batch.draw(canoBaixo, posicaoCanoHorizontal,
@@ -217,7 +257,7 @@ public class JogoFlappyBird extends ApplicationAdapter {
 			batch.draw(gameOver, larguraDispositivo / 2 - gameOver.getWidth() / 2, alturaDispositivo / 2);
 			textoReiniciar.draw(batch,"TOQUE NA TELA PARA REINICIAR!",
 					larguraDispositivo / 2 -250, alturaDispositivo / 2 - gameOver.getHeight() / 2);
-			textoMelhorPontuacao.draw(batch,"MELHOR PONTUAÇÂO: 0 PONTOS",
+			textoMelhorPontuacao.draw(batch,"MELHOR PONTUAÇÂO: " + pontuacaoMaxima + " PONTOS",
 					larguraDispositivo / 2 -250, alturaDispositivo / 2 - gameOver.getHeight() * 2);
 		}
 
